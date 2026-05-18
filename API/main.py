@@ -13,13 +13,13 @@ async def status():
     return {"status": "ok"}
 
 
-@app.post("/webhook")
+@app.post("/submit_review")
 async def receive_github_webhook(payload: dict):
     print("收到 Webhook 数据啦：", payload)
 
     payload_str = json.dumps(payload)
 
-    await redis_client.lpush("webhook", payload_str)
+    await redis_client.lpush("code_review_tasks", payload_str)
     return {"message": "Webhook received successfully"}
 
 

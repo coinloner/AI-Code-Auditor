@@ -1,70 +1,51 @@
 import redis.asyncio as redis
-import json
-import httpx
 import asyncio
 from core.llm_service import ask_kimi_to_review
+from Database.vector_db import CodeKnowledgeBase
 
 redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
-def split_diff_by_file(raw_diff_text):
-    file_chunks = raw_diff_text.split("diff --git")
+kb = CodeKnowledgeBase()
 
-    clean_files = []
-    for chunk in file_chunks:
-        if not chunk.strip():
-            continue
+async def process_code_review_task(diff_content:str):
+    relate_chunks = kb.search_similar_code(query_text=diff_content,n_results=5)
 
-        complete_chunk = "diff --git " + chunk
-        clean_files.append(complete_chunk)
-
-    print(f"切出了{len(clean_files)}块")
-    return clean_files
+    if relate_chunks:
+        context_code = "\n\n".join(relate_chunks)
+        print(f"识别出{len(relate_chunks)}块相关代码")
+    else:
+        context_code = "无相关历史代码上下文。"
+        print("未检索到强相关历史代码，将仅基于本次增量进行审查。")
 
 
+    review_result = await ask_kimi_to_review(diff_content=diff_content, context_code=context_code)
 
+    print(review_result)
 
-async def process_single_task(payload_str):
-    try:
-        payload = json.loads(payload_str)
-        diff_url = payload.get("pull_request",{}).get("diff_url")
-
-        if not diff_url:
-            return
-
-        print(f"开始拉取raw:{diff_url}")
-
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            response = await client.get(diff_url)
-            raw_diff_text = response.text
-
-        file_diff_list = split_diff_by_file(raw_diff_text)
-
-        for index, file_chunk in enumerate(file_diff_list):
-            if len(file_diff_list[index]) > 30000:
-                print(f"文件过大")
-
-            print(f"正在处理第{index+1}块切块")
-            opinion = await ask_kimi_to_review(file_chunk)
-
-            print(opinion)
-
-
-    except Exception as e:
-        print(f"{e}")
-
-
-async def main_loop():
+async def main_worker_loop():
     while True:
-        task_data = await redis_client.brpop("webhook", 0)
+        try:
+            task = await redis_client.brpop("code_review_tasks", timeout=0)
 
-        if task_data:
-            _, task_data = task_data
+            if task:
+                queue_name, diff_content = task
+                print("收到新的代码审查任务，分配线程处理...")
+                asyncio.create_task(process_code_review_task(diff_content))
 
-            asyncio.create_task(process_single_task(task_data))
+
+        except Exception as e:
+            print(f"Redis 监听循环发生致命错误: {e}")
+            await asyncio.sleep(1)
 
 if __name__ == "__main__":
-    # 启动 Python 的异步事件循环
-    asyncio.run(main_loop())
+    # 启动异步事件循环
+    try:
+        asyncio.run(main_worker_loop())
+    except KeyboardInterrupt:
+        print("Worker 已手动停止。")
+
+
+
 
 
 
