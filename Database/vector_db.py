@@ -62,7 +62,7 @@ class CodeKnowledgeBase:
             tree = ast.parse(source_code)
         except SyntaxError:
             print(f"文件出现错误{filepath}")
-            return [], [], []
+            return None
 
         docs, metas, ids = [], [], []
 
