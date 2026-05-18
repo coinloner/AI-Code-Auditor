@@ -1,7 +1,6 @@
 import os
 import asyncio
 
-from grpc.framework.interfaces.base.utilities import completion
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 

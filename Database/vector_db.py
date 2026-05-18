@@ -4,8 +4,6 @@ import chromadb
 import subprocess
 
 
-client = chromadb.PersistentClient(path="./.chroma_db")
-collection = client.get_or_create_collection(name="project_codebase")
 
 
 def find_project_root(starting_path=None):
@@ -45,11 +43,13 @@ def find_project_root(starting_path=None):
 
 
 class CodeKnowledgeBase:
-    def __init__(self,db_path = "./.chroma_db", target_path=None,collection_name = "project_codebase"):
+    def __init__(self,target_path=None,collection_name = "project_codebase"):
         self.project_root = target_path if target_path else find_project_root()
 
         self.data_dir = os.path.join(self.project_root, ".data")
         os.makedirs(self.data_dir, exist_ok=True)
+
+        db_path = os.path.join(self.data_dir, "chroma_db")
 
         self.client = chromadb.PersistentClient(path=db_path)
         self.collection = self.client.get_or_create_collection(name=collection_name)
@@ -108,10 +108,10 @@ class CodeKnowledgeBase:
 
         if all_docs:
             print(f"共提取出 {len(all_docs)} 个逻辑代码块，分别是{all_docs}，准备打入向量数据库...")
-            if collection.count() > 0:
-                collection.delete(where={"file_path": {"$ne": ""}})
+            if self.collection.count() > 0:
+                self.collection.delete(where={"file_path": {"$ne": ""}})
 
-            collection.add(
+            self.collection.add(
                 documents=all_docs,
                 metadatas=all_metas,
                 ids=all_ids

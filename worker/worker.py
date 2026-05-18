@@ -10,7 +10,7 @@ redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=T
 kb = CodeKnowledgeBase()
 
 def save_review_report_to_md(diff_content: str, relate_chunks: list, review_result: str):
-    report_dir = "review_reports"
+    report_dir = os.path.join(kb.project_root, ".data", "review_reports")
     os.makedirs(report_dir, exist_ok=True)
 
     now = datetime.datetime.now()
