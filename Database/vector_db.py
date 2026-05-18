@@ -1,17 +1,58 @@
 import os
 import ast
 import chromadb
-from sympy.multipledispatch.dispatcher import source
+import subprocess
+
 
 client = chromadb.PersistentClient(path="./.chroma_db")
 collection = client.get_or_create_collection(name="project_codebase")
 
 
+def find_project_root(starting_path=None):
+    """
+    工业级探针：寻找目标项目的真实根目录
+    """
+    # 如果没指定，默认从执行命令的当前目录开始找
+    if starting_path is None:
+        starting_path = os.getcwd()
+
+    current_dir = os.path.abspath(starting_path)
+
+    # 工业界公认的项目根目录特征标志物
+    # .git 是最权威的，其次是各种包管理配置文件
+    root_markers = ['.git', 'requirements.txt', 'pyproject.toml', 'setup.py', '.venv']
+
+    while current_dir != os.path.dirname(current_dir):  # 一直往上找，直到系统根目录 (如 /)
+        for marker in root_markers:
+            if os.path.exists(os.path.join(current_dir, marker)):
+                return current_dir
+        # 如果没找到，往上退一层继续找
+        current_dir = os.path.dirname(current_dir)
+
+    # 如果实在找不到任何特征，兜底方案：使用 Git 原生命令去问 (适用于隐藏得很深的子模块)
+    try:
+        git_root = subprocess.check_output(
+            ['git', 'rev-parse', '--show-toplevel'],
+            cwd=starting_path,
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+        return git_root
+    except Exception:
+        pass
+
+    # 如果上面所有方案全挂了，退化为最初始的运行目录
+    return os.path.abspath(starting_path)
+
+
 class CodeKnowledgeBase:
-    def __init__(self,db_path = "./.chroma_db", collection_name = "project_codebase"):
+    def __init__(self,db_path = "./.chroma_db", target_path=None,collection_name = "project_codebase"):
+        self.project_root = target_path if target_path else find_project_root()
+
         self.client = chromadb.PersistentClient(path=db_path)
         self.collection = self.client.get_or_create_collection(name=collection_name)
         self.ignore_dirs = {".git", ".venv", "__pycache__", "node_modules", ".chroma_db"}
+
+
 
     def extract_chunks_from_file(self,filepath):
         with open(filepath, "r", encoding='utf-8') as f:
@@ -50,7 +91,7 @@ class CodeKnowledgeBase:
     def build_full_knowledge_base(self):
         all_docs, all_metas, all_ids = [], [], []
 
-        for root, dirs, files in os.walk("."):
+        for root, dirs, files in os.walk(self.project_root):
             dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
 
             for file in files:
@@ -63,7 +104,7 @@ class CodeKnowledgeBase:
                     all_ids.extend(ids)
 
         if all_docs:
-            print(f"共提取出 {len(all_docs)} 个逻辑代码块，准备打入向量数据库...")
+            print(f"共提取出 {len(all_docs)} 个逻辑代码块，分别是{all_docs}，准备打入向量数据库...")
             if collection.count() > 0:
                 collection.delete(where={"file_path": {"$ne": ""}})
 
