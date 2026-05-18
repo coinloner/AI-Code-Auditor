@@ -1,0 +1,6 @@
+# .gitignore
+.chroma_db/
+review_reports/
+__pycache__/
+.venv/
+.env

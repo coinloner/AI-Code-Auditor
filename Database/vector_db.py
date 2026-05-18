@@ -48,6 +48,9 @@ class CodeKnowledgeBase:
     def __init__(self,db_path = "./.chroma_db", target_path=None,collection_name = "project_codebase"):
         self.project_root = target_path if target_path else find_project_root()
 
+        self.data_dir = os.path.join(self.project_root, ".data")
+        os.makedirs(self.data_dir, exist_ok=True)
+
         self.client = chromadb.PersistentClient(path=db_path)
         self.collection = self.client.get_or_create_collection(name=collection_name)
         self.ignore_dirs = {".git", ".venv", "__pycache__", "node_modules", ".chroma_db"}
