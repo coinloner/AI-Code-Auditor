@@ -7,9 +7,6 @@ import subprocess
 
 
 def find_project_root(starting_path=None):
-    """
-    工业级探针：寻找目标项目的真实根目录
-    """
     # 如果没指定，默认从执行命令的当前目录开始找
     if starting_path is None:
         starting_path = os.getcwd()
@@ -65,7 +62,7 @@ class CodeKnowledgeBase:
             tree = ast.parse(source_code)
         except SyntaxError:
             print(f"文件出现错误{filepath}")
-            return None
+            return [],[],[]
 
         docs, metas, ids = [], [], []
 
